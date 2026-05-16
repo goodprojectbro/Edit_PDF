@@ -109,6 +109,7 @@ Screen (overlays-layer) → PDF (pdf-lib)
 - [x] إصلاح روابط خط Cairo: تغير اسم الملف من `Cairo%5Bwght%5D.ttf` إلى `Cairo%5Bslnt%2Cwght%5D.ttf` (أضيف محور `slnt`)
 - [x] إصلاح تصدير PDF: استبدال `drawText('✔'/'✘')` بـ `drawSvgPath` لرسم العلامات كخطوط SVG (لا تعتمد على خط)، وإزالة fallback Helvetica للنصوص العربية
 - [x] إضافة `@pdf-lib/fontkit` CDN وتسجيله بعد `PDFDocument.load` لتضمين الخطوط المخصصة
+- [x] إصلاح تحجيم التصدير: ضرب أحجام العناصر بـ `scaleX = pdfWidth / canvasRect.width` (≈ 1/1.5) لمطابقة الحجم البصري بين HTML و PDF
 - [ ] اختبار على متصفحات متعددة (Chrome, Firefox, Safari)
 - [ ] التحقق من رابط خط Cairo TTF (قد يتغير اسم الملف في مستودع Google Fonts)
 - [ ] إضافة مؤشر تحميل أثناء معالجة PDF
