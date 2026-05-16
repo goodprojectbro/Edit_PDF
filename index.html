@@ -8,6 +8,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
   <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+  <script src="https://unpkg.com/@pdf-lib/fontkit@1.1.1/dist/fontkit.umd.min.js"></script>
 
 
   <style>
@@ -522,6 +523,7 @@
         STATE.pdfDoc = await loadingTask.promise;
 
         STATE.pdfLibDoc = await PDFLib.PDFDocument.load(STATE.pdfBytes.slice(0));
+        STATE.pdfLibDoc.registerFontkit(fontkit);
 
         STATE.annotations = [];
         STATE.selectedAnn = null;
