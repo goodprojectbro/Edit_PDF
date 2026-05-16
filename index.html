@@ -620,15 +620,20 @@
             const actualSize = mr ? Math.max(mr.width, mr.height) : ann.fontSize * 1.75;
             const svgSize = Math.round(actualSize * sx);
 
+            const centerX = ann.relX * width;
+            const centerY = height - ann.relY * height;
+
             if (ann.type === 'true') {
-              page.drawSvgPath('M -5,-3 L -1,3 L 6,-4', {
-                x: pdfX, y: pdfY, scale: svgSize / 11,
-                borderColor: PDFLib.rgb(0, 1, 0), borderWidth: Math.max(1.5, svgSize / 12),
+              const scale = svgSize / 20;
+              page.drawSvgPath('M 5 15 L 12 22 L 25 5', {
+                x: centerX - 15 * scale, y: centerY - 13.5 * scale, scale,
+                borderColor: PDFLib.rgb(0, 0.8, 0), borderWidth: 2.5,
               });
             } else {
-              page.drawSvgPath('M -5,-5 L 5,5 M 5,-5 L -5,5', {
-                x: pdfX, y: pdfY, scale: svgSize / 10,
-                borderColor: PDFLib.rgb(1, 0, 0), borderWidth: Math.max(1.5, svgSize / 12),
+              const scale = svgSize / 20;
+              page.drawSvgPath('M 5 5 L 25 25 M 25 5 L 5 25', {
+                x: centerX - 15 * scale, y: centerY - 15 * scale, scale,
+                borderColor: PDFLib.rgb(0.8, 0, 0), borderWidth: 2.5,
               });
             }
           }
