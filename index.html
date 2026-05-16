@@ -277,6 +277,19 @@
     import * as pdfjsLib from 'pdfjs-dist';
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.7.284/build/pdf.worker.min.mjs';
 
+    let _shaperPromise;
+    async function getShaper() {
+      if (!_shaperPromise) {
+        _shaperPromise = (async () => {
+          try {
+            const mod = await import('https://cdn.jsdelivr.net/npm/arabic-shaping@2.1.0/+esm');
+            return mod.shapeArabic || mod.default || (t => t);
+          } catch { return t => t; }
+        })();
+      }
+      return _shaperPromise;
+    }
+
     const LOG = {
       debug: (msg, data) => console.debug(`[PDF Editor] ${msg}`, data ?? ''),
       error: (msg, err) => console.error(`[PDF Editor] ERROR: ${msg}`, err)
@@ -555,6 +568,7 @@
           STATE.cairoFont = await STATE.pdfLibDoc.embedFont(STATE.cairoFontBytes);
         }
 
+        const shaper = await getShaper();
         const pages = STATE.pdfLibDoc.getPages();
         const cache = {};
 
@@ -595,25 +609,28 @@
 
           if (ann.type === 'text' && ann.text && STATE.cairoFont) {
             const pdfSize = ann.fontSize * sx;
-            page.drawText(ann.text, {
-              x: pdfX, y: pdfY, size: pdfSize, font: STATE.cairoFont, color: PDFLib.rgb(0, 0, 0)
+            const shaped = shaper(ann.text);
+            const textW = STATE.cairoFont.widthOfTextAtSize(shaped, pdfSize);
+            page.drawText(shaped, {
+              x: pdfX - textW, y: pdfY, size: pdfSize, font: STATE.cairoFont, color: PDFLib.rgb(0, 0, 0)
             });
-          } else if (ann.type === 'true') {
-            const svgSize = Math.round(ann.fontSize * 1.75 * sx);
-            page.drawSvgPath('M -5,-3 L -1,3 L 6,-4', {
-              x: pdfX, y: pdfY,
-              scale: svgSize / 11,
-              borderColor: PDFLib.rgb(22/255, 163/255, 74/255),
-              borderWidth: Math.max(2.5, svgSize / 7),
-            });
-          } else if (ann.type === 'false') {
-            const svgSize = Math.round(ann.fontSize * 1.75 * sx);
-            page.drawSvgPath('M -5,-5 L 5,5 M 5,-5 L -5,5', {
-              x: pdfX, y: pdfY,
-              scale: svgSize / 10,
-              borderColor: PDFLib.rgb(220/255, 38/255, 38/255),
-              borderWidth: Math.max(2.5, svgSize / 7),
-            });
+          } else if (ann.type === 'true' || ann.type === 'false') {
+            const markEl = annEl?.querySelector('.annotation-mark');
+            const mr = markEl?.getBoundingClientRect();
+            const actualSize = mr ? Math.max(mr.width, mr.height) : ann.fontSize * 1.75;
+            const svgSize = Math.round(actualSize * sx);
+
+            if (ann.type === 'true') {
+              page.drawSvgPath('M -5,-3 L -1,3 L 6,-4', {
+                x: pdfX, y: pdfY, scale: svgSize / 11,
+                borderColor: PDFLib.rgb(0, 1, 0), borderWidth: Math.max(1.5, svgSize / 12),
+              });
+            } else {
+              page.drawSvgPath('M -5,-5 L 5,5 M 5,-5 L -5,5', {
+                x: pdfX, y: pdfY, scale: svgSize / 10,
+                borderColor: PDFLib.rgb(1, 0, 0), borderWidth: Math.max(1.5, svgSize / 12),
+              });
+            }
           }
         }
 
