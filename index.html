@@ -307,9 +307,9 @@
 
     async function loadCairoFontBytes() {
       const urls = [
-        'https://raw.githubusercontent.com/google/fonts/main/ofl/cairo/Cairo%5Bwght%5D.ttf',
-        'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/cairo/Cairo%5Bwght%5D.ttf',
-        'https://raw.githubusercontent.com/google/fonts/main/ofl/cairo/static/Cairo-Regular.ttf'
+        'https://raw.githubusercontent.com/google/fonts/main/ofl/cairo/Cairo%5Bslnt%2Cwght%5D.ttf',
+        'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/cairo/Cairo%5Bslnt%2Cwght%5D.ttf',
+        'https://raw.githubusercontent.com/google/fonts/main/ofl/cairo/Cairo%5Bslnt%2Cwght%5D.ttf?raw=1'
       ];
       for (const url of urls) {
         try {
@@ -588,7 +588,7 @@
         setTimeout(() => URL.revokeObjectURL(url), 200);
       } catch (err) {
         LOG.error('Download failed', err);
-        alert('فشل تنزيل الملف.');
+        alert(`فشل تنزيل الملف: ${err.message || 'خطأ غير معروف. افتح Console (F12) للمزيد.'}`);
       }
     }
 

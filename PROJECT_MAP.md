@@ -106,6 +106,7 @@ Screen (overlays-layer) → PDF (pdf-lib)
 - [x] إصلاح تحجيم علامات ✔/✘: كان يضبط `.annotation-content` بدلاً من `.annotation-mark` فأيقونة العلامة لا تتغير
 - [x] إصلاح race condition في download (`URL.revokeObjectURL` ← `setTimeout` لـ Safari)
 - [x] تحديث `vercel.json` إلى صيغة حديثة (إزالة `@vercel/static` المهجور، إضافة `X-Content-Type-Options` + `Referrer-Policy`)
+- [x] إصلاح روابط خط Cairo: تغير اسم الملف من `Cairo%5Bwght%5D.ttf` إلى `Cairo%5Bslnt%2Cwght%5D.ttf` (أضيف محور `slnt`)
 - [ ] اختبار على متصفحات متعددة (Chrome, Firefox, Safari)
 - [ ] التحقق من رابط خط Cairo TTF (قد يتغير اسم الملف في مستودع Google Fonts)
 - [ ] إضافة مؤشر تحميل أثناء معالجة PDF
