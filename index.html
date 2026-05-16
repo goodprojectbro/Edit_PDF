@@ -556,46 +556,63 @@
         }
 
         const pages = STATE.pdfLibDoc.getPages();
-        const scaleCache = {};
+        const cache = {};
 
         for (const ann of STATE.annotations) {
           const page = pages[ann.pageNum - 1];
           if (!page) continue;
           const { width, height } = page.getSize();
 
-          if (!scaleCache[ann.pageNum]) {
+          if (!cache[ann.pageNum]) {
             const container = document.querySelector(`.page-container[data-page-num="${ann.pageNum}"]`);
             const rect = container?.querySelector('canvas')?.getBoundingClientRect();
-            scaleCache[ann.pageNum] = {
+            cache[ann.pageNum] = {
               sx: rect ? width / rect.width : 1 / STATE.scale,
               sy: rect ? height / rect.height : 1 / STATE.scale,
+              cw: rect?.width || width / STATE.scale,
+              ch: rect?.height || height / STATE.scale,
             };
           }
-          const { sx, sy } = scaleCache[ann.pageNum];
+          const { sx, sy, cw, ch } = cache[ann.pageNum];
 
-          const x = ann.relX * width;
-          const y = height - ann.relY * height;
+          const htmlX = ann.relX * cw;
+          const htmlY = ann.relY * ch;
+
+          let elemH;
+          const annEl = document.querySelector(`.annotation-overlay[data-ann-id="${ann.id}"]`);
+          const contentEl = annEl?.querySelector('.annotation-content');
+          const cr = contentEl?.getBoundingClientRect();
+          if (cr) {
+            elemH = cr.height;
+          } else if (ann.type === 'text') {
+            elemH = ann.fontSize + 8;
+          } else {
+            elemH = ann.fontSize * 1.75 + 4;
+          }
+
+          const pdfX = htmlX * sx;
+          const pdfY = height - htmlY * sy - elemH * sy;
 
           if (ann.type === 'text' && ann.text && STATE.cairoFont) {
             const pdfSize = ann.fontSize * sx;
             page.drawText(ann.text, {
-              x, y: y - pdfSize * 0.35, size: pdfSize, font: STATE.cairoFont, color: PDFLib.rgb(0, 0, 0)
+              x: pdfX, y: pdfY, size: pdfSize, font: STATE.cairoFont, color: PDFLib.rgb(0, 0, 0)
             });
           } else if (ann.type === 'true') {
             const svgSize = Math.round(ann.fontSize * 1.75 * sx);
             page.drawSvgPath('M -5,-3 L -1,3 L 6,-4', {
-              x, y,
+              x: pdfX, y: pdfY,
               scale: svgSize / 11,
               borderColor: PDFLib.rgb(22/255, 163/255, 74/255),
-              borderWidth: Math.max(1.5, svgSize / 16),
+              borderWidth: Math.max(2.5, svgSize / 7),
             });
           } else if (ann.type === 'false') {
             const svgSize = Math.round(ann.fontSize * 1.75 * sx);
             page.drawSvgPath('M -5,-5 L 5,5 M 5,-5 L -5,5', {
-              x, y,
+              x: pdfX, y: pdfY,
               scale: svgSize / 10,
               borderColor: PDFLib.rgb(220/255, 38/255, 38/255),
-              borderWidth: Math.max(1.5, svgSize / 16),
+              borderWidth: Math.max(2.5, svgSize / 7),
             });
           }
         }
