@@ -555,7 +555,6 @@
           STATE.cairoFont = await STATE.pdfLibDoc.embedFont(STATE.cairoFontBytes);
         }
 
-        const fontToUse = STATE.cairoFont || await STATE.pdfLibDoc.embedFont(PDFLib.StandardFonts.Helvetica);
         const pages = STATE.pdfLibDoc.getPages();
 
         for (const ann of STATE.annotations) {
@@ -565,17 +564,25 @@
           const x = ann.relX * width;
           const y = height - ann.relY * height;
 
-          if (ann.type === 'text' && ann.text) {
+          if (ann.type === 'text' && ann.text && STATE.cairoFont) {
             page.drawText(ann.text, {
-              x, y, size: ann.fontSize, font: fontToUse, color: PDFLib.rgb(0, 0, 0)
+              x, y, size: ann.fontSize, font: STATE.cairoFont, color: PDFLib.rgb(0, 0, 0)
             });
           } else if (ann.type === 'true') {
-            page.drawText('✔', {
-              x, y, size: Math.round(ann.fontSize * 1.75), font: fontToUse, color: PDFLib.rgb(22/255, 163/255, 74/255)
+            const size = Math.round(ann.fontSize * 1.75);
+            page.drawSvgPath('M -5,-3 L -1,3 L 6,-4', {
+              x, y,
+              scale: size / 11,
+              borderColor: PDFLib.rgb(22/255, 163/255, 74/255),
+              borderWidth: Math.max(1.5, size / 16),
             });
           } else if (ann.type === 'false') {
-            page.drawText('✘', {
-              x, y, size: Math.round(ann.fontSize * 1.75), font: fontToUse, color: PDFLib.rgb(220/255, 38/255, 38/255)
+            const size = Math.round(ann.fontSize * 1.75);
+            page.drawSvgPath('M -5,-5 L 5,5 M 5,-5 L -5,5', {
+              x, y,
+              scale: size / 10,
+              borderColor: PDFLib.rgb(220/255, 38/255, 38/255),
+              borderWidth: Math.max(1.5, size / 16),
             });
           }
         }
