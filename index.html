@@ -583,58 +583,34 @@
           const { width, height } = page.getSize();
 
           if (!cache[ann.pageNum]) {
-            const container = document.querySelector(`.page-container[data-page-num="${ann.pageNum}"]`);
-            const rect = container?.querySelector('canvas')?.getBoundingClientRect();
-            cache[ann.pageNum] = {
-              sx: rect ? width / rect.width : 1 / STATE.scale,
-              sy: rect ? height / rect.height : 1 / STATE.scale,
-              cw: rect?.width || width / STATE.scale,
-              ch: rect?.height || height / STATE.scale,
-            };
+            const canvasEl = document.querySelector(`.page-container[data-page-num="${ann.pageNum}"] canvas`);
+            const cr = canvasEl?.getBoundingClientRect();
+            cache[ann.pageNum] = { cr };
           }
-          const { sx, sy, cw, ch } = cache[ann.pageNum];
+          const { cr } = cache[ann.pageNum];
+          if (!cr) continue;
 
-          const htmlX = ann.relX * cw;
-          const htmlY = ann.relY * ch;
-
-          let elemH;
           const annEl = document.querySelector(`.annotation-overlay[data-ann-id="${ann.id}"]`);
           const contentEl = annEl?.querySelector('.annotation-content');
-          const cr = contentEl?.getBoundingClientRect();
-          if (cr) {
-            elemH = cr.height;
-          } else if (ann.type === 'text') {
-            elemH = ann.fontSize + 8;
-          } else {
-            elemH = ann.fontSize * 1.75 + 4;
-          }
+          const elRect = contentEl?.getBoundingClientRect();
+          if (!elRect) continue;
 
-          const pdfX = htmlX * sx;
-          const pdfY = height - htmlY * sy - elemH * sy;
+          const relX = elRect.left - cr.left;
+          const relY = elRect.top - cr.top;
+          const pdfX = (relX / cr.width) * width;
+          const pdfY_topDown = (relY / cr.height) * height;
+          const pdfWidth = (elRect.width / cr.width) * width;
+          const pdfHeight = (elRect.height / cr.height) * height;
+          const pdfY = height - pdfY_topDown - pdfHeight;
 
           if (ann.type === 'text' && ann.text && STATE.cairoFont) {
-            const pdfSize = ann.fontSize * sx;
+            const pdfSize = pdfHeight;
             const shaped = shaper(ann.text);
             const textW = STATE.cairoFont.widthOfTextAtSize(shaped, pdfSize);
             page.drawText(shaped, {
-              x: pdfX - textW, y: pdfY, size: pdfSize, font: STATE.cairoFont, color: PDFLib.rgb(0, 0, 0)
+              x: pdfX + pdfWidth - textW, y: pdfY, size: pdfSize, font: STATE.cairoFont, color: PDFLib.rgb(0, 0, 0)
             });
           } else if (ann.type === 'true' || ann.type === 'false') {
-            const markEl = annEl?.querySelector('.annotation-content');
-            const container = document.querySelector(`.page-container[data-page-num="${ann.pageNum}"]`);
-            const cw = container?.offsetWidth || 1;
-            const ch = container?.offsetHeight || 1;
-
-            const elLeft = markEl?.offsetLeft ?? ann.relX * cw;
-            const elTop = markEl?.offsetTop ?? ann.relY * ch;
-            const elW = markEl?.offsetWidth ?? ann.fontSize * 1.75;
-            const elH = markEl?.offsetHeight ?? ann.fontSize * 1.75;
-
-            const pdfX = (elLeft / cw) * width;
-            const pdfWidth = (elW / cw) * width;
-            const pdfHeight = (elH / ch) * height;
-            const pdfY = height - ((elTop + elH) / ch) * height;
-
             const lineThick = Math.max(2, pdfWidth * 0.12);
 
             if (ann.type === 'true') {
