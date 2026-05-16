@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>محرر PDF - إضافة تصحيحات وتعليقات</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+
+
+  <style>
+    * { font-family: 'Cairo', sans-serif; }
+    body { margin: 0; background: #f3f4f6; min-height: 100vh; display: flex; flex-direction: column; }
+
+    .page-container {
+      position: relative;
+      margin: 1rem auto;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+      background: #fff;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .overlays-layer {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .overlays-layer.active-tool {
+      pointer-events: auto;
+      cursor: crosshair;
+    }
+
+    .overlays-layer.active-tool[data-tool-active="text"] {
+      cursor: text;
+    }
+
+    .annotation-overlay {
+      position: absolute;
+      pointer-events: auto;
+      transform: translate(-50%, -50%);
+    }
+
+    .annotation-overlay:hover .annotation-delete-btn {
+      opacity: 1;
+    }
+
+    .annotation-delete-btn {
+      position: absolute;
+      top: -6px;
+      inset-inline-end: -6px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #dc2626;
+      color: #fff;
+      border: 2px solid #fff;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1;
+      padding: 0;
+      z-index: 20;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    }
+
+    .annotation-delete-btn:hover {
+      background: #b91c1c;
+    }
+
+    .annotation-input {
+      border: 1px dashed #3b82f6;
+      background: transparent;
+      padding: 4px 8px;
+      font-size: 14px;
+      min-width: 80px;
+      outline: none;
+      border-radius: 4px;
+      font-family: 'Cairo', sans-serif;
+      direction: rtl;
+    }
+
+    .annotation-mark {
+      font-size: 28px;
+      line-height: 1;
+      user-select: none;
+      text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff;
+      font-family: 'Cairo', sans-serif;
+      display: inline-block;
+      padding: 2px;
+    }
+
+    .annotation-mark.mark-true { color: #16a34a; }
+    .annotation-mark.mark-false { color: #dc2626; }
+
+    .tool-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 2px solid transparent;
+      background: transparent;
+      color: #374151;
+      transition: all 0.15s;
+    }
+
+    .tool-btn:hover {
+      background: #e5e7eb;
+    }
+
+    .tool-btn.active {
+      background: #dbeafe;
+      border-color: #3b82f6;
+      color: #1d4ed8;
+    }
+
+    .download-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      border: none;
+      background: #2563eb;
+      color: #fff;
+      transition: all 0.15s;
+    }
+
+    .download-btn:hover { background: #1d4ed8; }
+    .download-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    #pdfViewer {
+      flex: 1;
+      width: 100%;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 4rem 1rem 3rem;
+    }
+
+    .annotation-overlay.selected {
+      outline: 2px solid #3b82f6;
+      outline-offset: 4px;
+      border-radius: 4px;
+      background: rgba(59,130,246,0.06);
+    }
+
+    .size-popup {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 50%;
+      transform: translateX(-50%);
+      display: none;
+      align-items: center;
+      gap: 2px;
+      background: #1f2937;
+      border-radius: 6px;
+      padding: 3px;
+      z-index: 25;
+      white-space: nowrap;
+      direction: ltr;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+
+    .annotation-overlay.selected .size-popup {
+      display: flex;
+    }
+
+    .size-popup-btn {
+      width: 24px; height: 24px;
+      border: none;
+      background: transparent;
+      color: #f3f4f6;
+      cursor: pointer;
+      font-size: 15px;
+      font-weight: 700;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.1s;
+    }
+    .size-popup-btn:hover { background: rgba(255,255,255,0.15); }
+
+    .size-popup-value {
+      font-size: 11px;
+      min-width: 26px;
+      text-align: center;
+      font-weight: 600;
+      color: #f3f4f6;
+    }
+
+    .empty-state { text-align: center; padding: 5rem 1rem; color: #9ca3af; }
+    .empty-state svg { margin: 0 auto 1rem; opacity: 0.4; }
+  </style>
+</head>
+<body>
+
+  <header class="bg-white shadow-sm border-b border-gray-200">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <svg class="w-7 h-7 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+        </svg>
+        <h1 class="text-lg font-bold text-gray-800">محرر PDF</h1>
+      </div>
+      <div class="flex items-center gap-3">
+        <span id="pageCount" class="text-sm text-gray-500"></span>
+        <label class="cursor-pointer bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold px-4 py-2 rounded-lg text-sm transition">
+          رفع PDF
+          <input type="file" id="fileInput" accept=".pdf" class="hidden" />
+        </label>
+      </div>
+    </div>
+  </header>
+
+  <nav class="sticky top-0 z-20 bg-white/95 backdrop-blur-sm border-b border-gray-200 shadow-sm">
+    <div class="max-w-6xl mx-auto px-4 py-2 flex items-center gap-2 justify-between">
+      <div class="flex items-center gap-1">
+        <button class="tool-btn" data-tool="text">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+          إضافة نص
+        </button>
+        <button class="tool-btn" data-tool="true">
+          <span class="text-green-600 text-lg leading-none">✔</span>
+          إضافة صح
+        </button>
+        <button class="tool-btn" data-tool="false">
+          <span class="text-red-600 text-lg leading-none">✘</span>
+          إضافة خطأ
+        </button>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="downloadBtn" class="download-btn" disabled>
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+          تنزيل PDF
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <main id="pdfViewer">
+    <div class="empty-state" id="emptyState">
+      <svg class="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+      </svg>
+      <p class="text-lg">قم برفع ملف PDF للبدء</p>
+      <p class="text-sm">اختر أداة من الشريط العلوي ثم انقر على الصفحة لإضافة نص أو علامة</p>
+    </div>
+  </main>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "pdfjs-dist": "https://cdn.jsdelivr.net/npm/pdfjs-dist@5.7.284/build/pdf.min.mjs"
+    }
+  }
+  </script>
+  <script type="module">
+    import * as pdfjsLib from 'pdfjs-dist';
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.7.284/build/pdf.worker.min.mjs';
+
+    const LOG = {
+      debug: (msg, data) => console.debug(`[PDF Editor] ${msg}`, data ?? ''),
+      error: (msg, err) => console.error(`[PDF Editor] ERROR: ${msg}`, err)
+    };
+
+    const FONT_SIZES = [10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 42, 48];
+
+    const STATE = {
+      pdfDoc: null,
+      pdfLibDoc: null,
+      pdfBytes: null,
+      cairoFontBytes: null,
+      cairoFont: null,
+      annotations: [],
+      activeTool: null,
+      scale: 1.5,
+      selectedAnn: null,
+      defaultFontSize: 16
+    };
+
+    const DOM = {
+      fileInput: document.getElementById('fileInput'),
+      pdfViewer: document.getElementById('pdfViewer'),
+      emptyState: document.getElementById('emptyState'),
+      toolBtns: document.querySelectorAll('[data-tool]'),
+      downloadBtn: document.getElementById('downloadBtn'),
+      pageCount: document.getElementById('pageCount')
+    };
+
+    async function loadCairoFontBytes() {
+      const urls = [
+        'https://raw.githubusercontent.com/google/fonts/main/ofl/cairo/Cairo%5Bwght%5D.ttf',
+        'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/cairo/Cairo%5Bwght%5D.ttf',
+        'https://raw.githubusercontent.com/google/fonts/main/ofl/cairo/static/Cairo-Regular.ttf'
+      ];
+      for (const url of urls) {
+        try {
+          const res = await fetch(url);
+          if (res.ok) return await res.arrayBuffer();
+        } catch { /* continue */ }
+      }
+      return null;
+    }
+
+    function setupTools() {
+      DOM.toolBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const tool = btn.dataset.tool;
+          if (STATE.activeTool === tool) {
+            STATE.activeTool = null;
+            DOM.toolBtns.forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.overlays-layer').forEach(el => {
+              el.classList.remove('active-tool');
+              el.dataset.toolActive = '';
+            });
+          } else {
+            STATE.activeTool = tool;
+            DOM.toolBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            document.querySelectorAll('.overlays-layer').forEach(el => {
+              el.classList.add('active-tool');
+              el.dataset.toolActive = (tool === 'text') ? 'text' : 'mark';
+            });
+          }
+        });
+      });
+    }
+
+    async function renderAllPages() {
+      DOM.pdfViewer.innerHTML = '';
+      if (!STATE.pdfDoc) return;
+
+      DOM.pageCount.textContent = `(${STATE.pdfDoc.numPages} صفحة)`;
+
+      const pageLayers = {};
+
+      for (let i = 1; i <= STATE.pdfDoc.numPages; i++) {
+        const page = await STATE.pdfDoc.getPage(i);
+        const viewport = page.getViewport({ scale: STATE.scale });
+
+        const container = document.createElement('div');
+        container.className = 'page-container';
+        container.style.width = `${viewport.width}px`;
+        container.style.height = `${viewport.height}px`;
+        container.dataset.pageNum = i;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        container.appendChild(canvas);
+
+        const ctx = canvas.getContext('2d');
+        await page.render({ canvasContext: ctx, viewport }).promise;
+
+        const overlaysLayer = document.createElement('div');
+        overlaysLayer.className = 'overlays-layer';
+        overlaysLayer.dataset.pageNum = i;
+
+        overlaysLayer.addEventListener('click', (e) => {
+          if (!STATE.activeTool) return;
+          if (e.target.closest('.annotation-overlay')) return;
+
+          const rect = overlaysLayer.getBoundingClientRect();
+          const relX = (e.clientX - rect.left) / rect.width;
+          const relY = (e.clientY - rect.top) / rect.height;
+
+          let type, text;
+          if (STATE.activeTool === 'text') { type = 'text'; text = ''; }
+          else if (STATE.activeTool === 'true') { type = 'true'; text = '✔'; }
+          else { type = 'false'; text = '✘'; }
+
+          const ann = { pageNum: i, type, relX, relY, text, fontSize: STATE.defaultFontSize };
+          STATE.annotations.push(ann);
+          renderAnnotation(ann, overlaysLayer);
+        });
+
+        container.appendChild(overlaysLayer);
+        DOM.pdfViewer.appendChild(container);
+        pageLayers[i] = overlaysLayer;
+      }
+
+      for (const ann of STATE.annotations) {
+        const layer = pageLayers[ann.pageNum];
+        if (layer) renderAnnotation(ann, layer);
+      }
+
+      DOM.downloadBtn.disabled = false;
+    }
+
+    function deselectAnn() {
+      if (STATE.selectedAnn) {
+        const prev = document.querySelector(`.annotation-overlay[data-ann-id="${STATE.selectedAnn}"]`);
+        if (prev) prev.classList.remove('selected');
+        STATE.selectedAnn = null;
+      }
+    }
+
+    function changeAnnSize(ann, dir) {
+      const idx = FONT_SIZES.indexOf(ann.fontSize);
+      const newIdx = idx + (dir === 'up' ? 1 : -1);
+      if (newIdx < 0 || newIdx >= FONT_SIZES.length) return;
+      ann.fontSize = FONT_SIZES[newIdx];
+      const el = document.querySelector(`.annotation-overlay[data-ann-id="${STATE.selectedAnn}"]`);
+      if (!el) return;
+      const content = el.querySelector('.annotation-content');
+      if (!content) return;
+      if (ann.type === 'text') {
+        const inp = content.querySelector('input');
+        if (inp) inp.style.fontSize = `${ann.fontSize}px`;
+      } else {
+        const mark = content.querySelector('.annotation-mark');
+        if (mark) mark.style.fontSize = `${Math.round(ann.fontSize * 1.75)}px`;
+      }
+      const val = el.querySelector('.size-popup-value');
+      if (val) val.textContent = ann.fontSize;
+    }
+
+    function renderAnnotation(ann, layer) {
+      const el = document.createElement('div');
+      el.className = 'annotation-overlay';
+      el.style.left = `${ann.relX * 100}%`;
+      el.style.top = `${ann.relY * 100}%`;
+      el.dataset.annId = ann.id || (ann.id = Date.now() + Math.random());
+
+      const content = document.createElement('span');
+      content.className = 'annotation-content';
+
+      if (ann.type === 'text') {
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'annotation-input';
+        input.placeholder = 'أدخل النص...';
+        input.dir = 'rtl';
+        input.value = ann.text || '';
+        input.style.fontSize = `${ann.fontSize}px`;
+        input.addEventListener('input', () => { ann.text = input.value; });
+        content.appendChild(input);
+        setTimeout(() => input.focus(), 50);
+      } else {
+        const span = document.createElement('span');
+        span.className = `annotation-mark mark-${ann.type}`;
+        span.textContent = ann.text;
+        span.style.fontSize = `${Math.round(ann.fontSize * 1.75)}px`;
+        content.appendChild(span);
+      }
+
+      el.appendChild(content);
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'annotation-delete-btn';
+      delBtn.innerHTML = '✕';
+      delBtn.title = 'حذف';
+      delBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        el.remove();
+        if (STATE.selectedAnn === ann.id) STATE.selectedAnn = null;
+        const idx = STATE.annotations.indexOf(ann);
+        if (idx !== -1) STATE.annotations.splice(idx, 1);
+      });
+      el.appendChild(delBtn);
+
+      const popup = document.createElement('div');
+      popup.className = 'size-popup';
+
+      const downBtn = document.createElement('button');
+      downBtn.className = 'size-popup-btn';
+      downBtn.textContent = '−';
+      downBtn.addEventListener('click', (e) => { e.stopPropagation(); changeAnnSize(ann, 'down'); });
+
+      const val = document.createElement('span');
+      val.className = 'size-popup-value';
+      val.textContent = ann.fontSize;
+
+      const upBtn = document.createElement('button');
+      upBtn.className = 'size-popup-btn';
+      upBtn.textContent = '+';
+      upBtn.addEventListener('click', (e) => { e.stopPropagation(); changeAnnSize(ann, 'up'); });
+
+      popup.appendChild(downBtn);
+      popup.appendChild(val);
+      popup.appendChild(upBtn);
+      el.appendChild(popup);
+
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const annId = el.dataset.annId;
+        if (STATE.selectedAnn === annId) {
+          deselectAnn();
+        } else {
+          deselectAnn();
+          STATE.selectedAnn = annId;
+          el.classList.add('selected');
+        }
+      });
+
+      layer.appendChild(el);
+    }
+
+    async function handleFile(file) {
+      try {
+        STATE.pdfBytes = await file.arrayBuffer();
+
+        const loadingTask = pdfjsLib.getDocument({ data: STATE.pdfBytes.slice(0) });
+        STATE.pdfDoc = await loadingTask.promise;
+
+        STATE.pdfLibDoc = await PDFLib.PDFDocument.load(STATE.pdfBytes.slice(0));
+
+        STATE.annotations = [];
+        STATE.selectedAnn = null;
+
+        if (!STATE.cairoFontBytes) {
+          STATE.cairoFontBytes = await loadCairoFontBytes();
+          if (STATE.cairoFontBytes) {
+            STATE.cairoFont = await STATE.pdfLibDoc.embedFont(STATE.cairoFontBytes);
+            LOG.debug('Cairo font loaded for PDF embedding');
+          } else {
+            LOG.error('Could not load Cairo font. Arabic text may not render correctly.');
+          }
+        } else {
+          STATE.cairoFont = await STATE.pdfLibDoc.embedFont(STATE.cairoFontBytes);
+        }
+
+        await renderAllPages();
+      } catch (err) {
+        LOG.error('Failed to load PDF', err);
+        alert(`فشل تحميل الملف: ${err.message || 'تأكد من أنه PDF صالح.'}`);
+      }
+    }
+
+    async function handleDownload() {
+      if (!STATE.pdfLibDoc) return;
+
+      try {
+        if (!STATE.cairoFont && STATE.cairoFontBytes) {
+          STATE.cairoFont = await STATE.pdfLibDoc.embedFont(STATE.cairoFontBytes);
+        }
+
+        const fontToUse = STATE.cairoFont || await STATE.pdfLibDoc.embedFont(PDFLib.StandardFonts.Helvetica);
+        const pages = STATE.pdfLibDoc.getPages();
+
+        for (const ann of STATE.annotations) {
+          const page = pages[ann.pageNum - 1];
+          if (!page) continue;
+          const { width, height } = page.getSize();
+          const x = ann.relX * width;
+          const y = height - ann.relY * height;
+
+          if (ann.type === 'text' && ann.text) {
+            page.drawText(ann.text, {
+              x, y, size: ann.fontSize, font: fontToUse, color: PDFLib.rgb(0, 0, 0)
+            });
+          } else if (ann.type === 'true') {
+            page.drawText('✔', {
+              x, y, size: Math.round(ann.fontSize * 1.75), font: fontToUse, color: PDFLib.rgb(22/255, 163/255, 74/255)
+            });
+          } else if (ann.type === 'false') {
+            page.drawText('✘', {
+              x, y, size: Math.round(ann.fontSize * 1.75), font: fontToUse, color: PDFLib.rgb(220/255, 38/255, 38/255)
+            });
+          }
+        }
+
+        const modifiedBytes = await STATE.pdfLibDoc.save();
+        const blob = new Blob([modifiedBytes], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'edited.pdf';
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 200);
+      } catch (err) {
+        LOG.error('Download failed', err);
+        alert('فشل تنزيل الملف.');
+      }
+    }
+
+    DOM.fileInput.addEventListener('change', (e) => {
+      const file = e.target.files?.[0];
+      if (file) handleFile(file);
+      e.target.value = '';
+    });
+
+    DOM.downloadBtn.addEventListener('click', handleDownload);
+
+    DOM.pdfViewer.addEventListener('click', (e) => {
+      if (!e.target.closest('.annotation-overlay')) deselectAnn();
+    });
+
+    setupTools();
+    LOG.debug('App initialized');
+  </script>
+</body>
+</html>
